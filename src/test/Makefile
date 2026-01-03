@@ -428,6 +428,28 @@ pid_unittest_DEFINES := \
 		USE_FEEDFORWARD= \
 		USE_ADVANCED_TPA= \
 
+pid_mpc_unittest_SRC :=  \
+		$(USER_DIR)/flight/tinympc/tinympc_wrapper.c \
+		$(USER_DIR)/common/crc.c \
+		$(USER_DIR)/common/filter.c \
+		$(USER_DIR)/common/maths.c \
+		$(USER_DIR)/common/pwl.c \
+		$(USER_DIR)/common/streambuf.c \
+		$(USER_DIR)/drivers/accgyro/gyro_sync.c \
+		$(USER_DIR)/fc/controlrate_profile.c \
+		$(USER_DIR)/fc/runtime_config.c \
+		$(USER_DIR)/flight/pid.c \
+		$(USER_DIR)/flight/pid_init.c \
+		$(USER_DIR)/pg/pg.c
+
+pid_mpc_unittest_DEFINES := \
+		USE_ITERM_RELAX= \
+		USE_RC_SMOOTHING_FILTER= \
+		USE_ABSOLUTE_CONTROL= \
+		USE_LAUNCH_CONTROL= \
+		USE_FEEDFORWARD= \
+		USE_ADVANCED_TPA= \
+
 rcdevice_unittest_DEFINES := \
 		USE_RCDEVICE=
 
