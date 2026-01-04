@@ -21,12 +21,12 @@ extern "C" {
 #include "fc/rc.h"
 #include "fc/rc_controls.h"
 #include "fc/runtime_config.h"
+#include "flight/geometric/geometric_control.h"
 #include "flight/imu.h"
 #include "flight/mixer.h"
 #include "flight/pid.h"
 #include "flight/pid_init.h"
 #include "flight/position.h"
-#include "flight/tinympc/tinympc_wrapper.h"
 #include "io/gps.h"
 #include "pg/pg.h"
 #include "pg/pg_ids.h"
@@ -44,58 +44,6 @@ acc_t acc;
 gyro_t gyro;
 attitudeEulerAngles_t attitude;
 rxRuntimeState_t rxRuntimeState = {};
-
-// PG Mocks
-// We can't easily rely on real PG macros without linker support for sections,
-// likely simpler to just define the structs and point pointers to them if
-// possible, or rely on PG_REGISTER if the linker script is used. Since we
-// manually link, PG might fail if it relies on linker sections. However,
-// usually PG_REGISTER just defines a variable.
-PG_REGISTER(accelerometerConfig_t, accelerometerConfig, PG_ACCELEROMETER_CONFIG,
-            0);
-PG_REGISTER(systemConfig_t, systemConfig, PG_SYSTEM_CONFIG, 2);
-PG_REGISTER(positionConfig_t, positionConfig, PG_SYSTEM_CONFIG, 4);
-
-bool unitLaunchControlActive = false;
-float simulatedMotorMixRange = 0.0f;
-float simulatedSetpointRate[3] = {0, 0, 0};
-bool simulatedThrottleRaised = false;
-float simulatedRcDeflection[3] = {0, 0, 0};
-float simulatedMaxRcDeflectionAbs = 0;
-float simulatedMaxRate[3] = {670, 670, 670};
-float simulatedPrevSetpointRate[3] = {0, 0, 0};
-float simulatedMixerGetRcThrottle = 0;
-
-float getMotorMixRange(void) { return simulatedMotorMixRange; }
-float getSetpointRate(int axis) { return simulatedSetpointRate[axis]; }
-bool wasThrottleRaised(void) { return simulatedThrottleRaised; }
-float getRcDeflectionAbs(int axis) {
-  return fabsf(simulatedRcDeflection[axis]);
-}
-float getMaxRcDeflectionAbs() { return fabsf(simulatedMaxRcDeflectionAbs); }
-float mixerGetRcThrottle() { return fabsf(simulatedMixerGetRcThrottle); }
-bool isBelowLandingAltitude(void) { return false; }
-void systemBeep(bool) {}
-bool gyroOverflowDetected(void) { return false; }
-float getRcDeflection(int axis) { return simulatedRcDeflection[axis]; }
-#define TARGET_BOARD_IDENTIFIER "TEST"
-#include "platform.h"
-float getRcDeflectionRaw(int axis) { return simulatedRcDeflection[axis]; }
-float getRawSetpoint(int axis) {
-  UNUSED(axis);
-  return 0;
-}
-float getFeedforward(int axis) {
-  return simulatedSetpointRate[axis] - simulatedPrevSetpointRate[axis];
-}
-void beeperConfirmationBeeps(uint8_t) {}
-bool isLaunchControlActive(void) { return unitLaunchControlActive; }
-void disarm(flightLogDisarmReason_e) {}
-float getMaxRcRate(int axis) {
-  UNUSED(axis);
-  return simulatedMaxRate[axis];
-}
-void initRcProcessing(void) {}
 }
 
 pidProfile_t *pidProfile;
@@ -134,8 +82,8 @@ void test_mpc_switching() {
   pidInit(pidProfile);
 
   // 1. Test Disabled
-  printf("Setting mpc_enabled=0\n");
-  pidProfile->mpc_enabled = 0;
+  printf("Setting geometric_enabled=0\n");
+  pidProfile->geometric_enabled = 0;
   // Need to initialize PID to set up default state logic if any
   // For switching test, we primarily care about pidController logic branch
 
@@ -169,34 +117,34 @@ void test_mpc_switching() {
     printf("WARN: P term is zero\n");
   }
 
-  // 2. Enable MPC
-  printf("Setting mpc_enabled=1\n");
-  pidProfile->mpc_enabled = 1;
+  // 2. Enable Geometric Control
+  printf("Setting geometric_enabled=1\n");
+  pidProfile->geometric_enabled = 1;
 
   // Run controller
   printf("Calling pidController (Time 2000)...\n");
   pidController(pidProfile, 2000);
 
-  // MPC wrapper mock (tinympc_wrapper.c) sets:
-  // controlOutput[FD_ROLL] = errorRoll * 0.5f;
-  // where errorRoll = setpoint - gyro
-  // setpoint=0, gyro=100 => error=-100 => output=-50
-  // And it clears P/I/D struct members.
+  // Geometric Controller default implementation:
+  // u = -GEOMETRIC_KW * error_w
+  // gyro=100, setpoint=0 (mocked) => error = 100
+  // u = -0.3 * 100 = -30.0 for Roll/Pitch, -0.1 * 100 = -10 for Yaw
+  // Check Roll (X)
 
   assert_true(pidData[FD_ROLL].P == 0.0f,
-              "MPC Enabled: P term should be cleared to 0");
+              "Geometric Enabled: P term should be cleared to 0");
   assert_true(pidData[FD_ROLL].I == 0.0f,
-              "MPC Enabled: I term should be cleared to 0");
+              "Geometric Enabled: I term should be cleared to 0");
 
   // Check Sum (output)
-  // Mock generated solver outputs 0.0
-  printf("MPC Output Roll: %f\n", pidData[FD_ROLL].Sum);
-  assert_true(fabsf(pidData[FD_ROLL].Sum - 0.0f) < 0.01f,
-              "MPC Enabled: Sum should match generated solver output (0.0)");
+  // Expected: -30.0f
+  printf("Geometric Output Roll: %f\n", pidData[FD_ROLL].Sum);
+  assert_true(fabsf(pidData[FD_ROLL].Sum - (-30.0f)) < 0.01f,
+              "Geometric Enabled: Sum should match expected output (-30.0)");
 }
 
 int main(void) {
-  test_mpc_switching();
+  test_mpc_switching(); // Renaming function is optional but good practice
   printf("All tests passed.\n");
   return 0;
 }

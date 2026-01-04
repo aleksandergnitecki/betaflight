@@ -62,7 +62,7 @@
 #include "sensors/battery.h"
 #include "sensors/gyro.h"
 
-#include "flight/tinympc/tinympc_wrapper.h"
+#include "flight/geometric/geometric_control.h"
 #include "pid.h"
 
 typedef enum {
@@ -1191,33 +1191,38 @@ void FAST_CODE pidController(const pidProfile_t *pidProfile,
   const bool launchControlActive = isLaunchControlActive();
 
   // ---------------------------------------------------------
-  // TinyMPC Integration
+  // GEOMETRIC CONTROL SWITCH
   // ---------------------------------------------------------
-  if (pidProfile->mpc_enabled) {
-    float setpointRates[3];
+  if (pidProfile->geometric_enabled) {
+    float setpointRate[3];
     float controlOutput[3];
-    float attRadians[3];
+    // Pass pointers to raw data. geometricUpdate handles logic.
+    // attitude.raw is in deci-degrees usually.
+    float att[3] = {(float)attitude.raw[FD_ROLL], (float)attitude.raw[FD_PITCH],
+                    (float)attitude.raw[FD_YAW]};
 
-    // Gather Setpoints & Attitude
+    // Gather Setpoints
     for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-      setpointRates[axis] = getSetpointRate(axis);
-      attRadians[axis] = DECIDEGREES_TO_RADIANS(attitude.raw[axis]);
+      setpointRate[axis] = getSetpointRate(axis);
     }
 
-    // Run Solver
-    tinympcUpdate(pidRuntime.dT, gyro.gyroADCf, attRadians, setpointRates,
-                  controlOutput);
+    geometricUpdate(pidRuntime.dT, gyro.gyroADCf, att, setpointRate,
+                    controlOutput);
 
-    // Apply Output
-    for (int axis = FD_ROLL; axis <= FD_YAW; axis++) {
-      pidData[axis].Sum = controlOutput[axis];
-      // clear legacy terms for logging
+    // Override PID Sums
+    pidData[FD_ROLL].Sum = controlOutput[FD_ROLL];
+    pidData[FD_PITCH].Sum = controlOutput[FD_PITCH];
+    pidData[FD_YAW].Sum = controlOutput[FD_YAW];
+
+    // Clear P/I/D terms for logging clarity
+    for (int axis = 0; axis < 3; axis++) {
       pidData[axis].P = 0;
       pidData[axis].I = 0;
       pidData[axis].D = 0;
       pidData[axis].F = 0;
     }
-    // Skip standard PID loop
+
+    // Skip legacy PID
     return;
   }
   // ---------------------------------------------------------
