@@ -189,10 +189,10 @@ void test_mpc_switching() {
               "MPC Enabled: I term should be cleared to 0");
 
   // Check Sum (output)
-  // Mock wrapper: output = (0 - 100) * 0.5 = -50.
+  // Mock generated solver outputs 0.0
   printf("MPC Output Roll: %f\n", pidData[FD_ROLL].Sum);
-  assert_true(fabsf(pidData[FD_ROLL].Sum - (-50.0f)) < 0.01f,
-              "MPC Enabled: Sum should match mock solver output");
+  assert_true(fabsf(pidData[FD_ROLL].Sum - 0.0f) < 0.01f,
+              "MPC Enabled: Sum should match generated solver output (0.0)");
 }
 
 int main(void) {

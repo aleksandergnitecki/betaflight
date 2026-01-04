@@ -430,6 +430,7 @@ pid_unittest_DEFINES := \
 
 pid_mpc_unittest_SRC :=  \
 		$(USER_DIR)/flight/tinympc/tinympc_wrapper.c \
+		$(USER_DIR)/flight/tinympc/generated_code/src/tiny_api.c \
 		$(USER_DIR)/common/crc.c \
 		$(USER_DIR)/common/filter.c \
 		$(USER_DIR)/common/maths.c \

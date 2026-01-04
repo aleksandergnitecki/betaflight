@@ -23,33 +23,42 @@ void tinympcReset(void) {
     workspace.u[i] = 0.0f;
 }
 
+#include "generated_code/tinympc/tiny_api.h"
+
 void tinympcUpdate(float dt, float *gyroRates, float *attitude,
                    float *setpointRates, float *controlOutput) {
   (void)dt;
-  (void)attitude;
+  (void)setpointRates;
 
   if (!initialized) {
     tinympcInit();
   }
 
-  // 1. State Estimation / Map BF state to TinyMPC state (x)
-  // x = [pos, vel, orientation, rates] (example)
-  // For ACRO we might just care about rates + attitude error
+  // 1. Map State to TinyMPC
+  // Zero out position/velocity for this simple test
+  for (int i = 0; i < 12; i++)
+    tiny_data_solver.x0[i] = 0;
 
-  // MOCK SOLVER: Simple P-controller behavior to prove connection
-  // In real implementation, this calls tiny_solve()
+  // Fill rates [p, q, r] -> indices 9, 10, 11
+  // gyroRates is [roll, pitch, yaw]
+  tiny_data_solver.x0[9] = gyroRates[FD_ROLL];
+  tiny_data_solver.x0[10] = gyroRates[FD_PITCH];
+  tiny_data_solver.x0[11] = gyroRates[FD_YAW];
 
-  // Roll
-  float errorRoll = setpointRates[FD_ROLL] - gyroRates[FD_ROLL];
-  controlOutput[FD_ROLL] = errorRoll * 0.5f; // Random P-gain mock
+  // Fill attitude [phi, theta, psi] -> indices 3, 4, 5
+  // Note: BF attitude indices might differ from standard frame, ensuring
+  // standard roll/pitch/yaw order here
+  tiny_data_solver.x0[3] = attitude[FD_ROLL];
+  tiny_data_solver.x0[4] = attitude[FD_PITCH];
+  tiny_data_solver.x0[5] = attitude[FD_YAW];
 
-  // Pitch
-  float errorPitch = setpointRates[FD_PITCH] - gyroRates[FD_PITCH];
-  controlOutput[FD_PITCH] = errorPitch * 0.5f;
+  // 2. Solve
+  tiny_solve();
 
-  // Yaw
-  float errorYaw = setpointRates[FD_YAW] - gyroRates[FD_YAW];
-  controlOutput[FD_YAW] = errorYaw * 1.5f;
-
-  // Throttle pass-through or Z-accel handling would happen here
+  // 3. Map Output: u -> [Thrust, Roll, Pitch, Yaw]
+  // Ideally this maps to Torque/Thrust. For PID sum equivalence:
+  // We assume u[1]=Roll, u[2]=Pitch, u[3]=Yaw
+  controlOutput[FD_ROLL] = tiny_data_solver.u[1];
+  controlOutput[FD_PITCH] = tiny_data_solver.u[2];
+  controlOutput[FD_YAW] = tiny_data_solver.u[3];
 }
